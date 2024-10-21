@@ -1,4 +1,4 @@
 # memory-match-game
 A simple memory match game from GitHub Pages.
 
-![Example Image](thumb.jpg)
+![Example Image](thumb.png)
