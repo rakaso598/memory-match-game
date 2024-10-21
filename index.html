@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Memory Match Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f7f5f2;
+            font-family: Arial, sans-serif;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        .game-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-gap: 10px;
+            width: 90vw;
+            height: 90vw;
+            max-width: 600px;
+            max-height: 600px;
+            position: relative;
+        }
+
+        .card {
+            background-color: #ffcccb;
+            width: 100%;
+            padding-top: 100%;
+            position: relative;
+            cursor: pointer;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.4s ease;
+        }
+
+        .card-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            background-color: #fff;
+            border-radius: 12px;
+            backface-visibility: hidden;
+            transform: rotateY(180deg);
+            transition: transform 0.4s ease;
+        }
+
+        .card.flipped .card-content {
+            transform: rotateY(0deg);
+        }
+
+        /* 모달 창 스타일 */
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            display: none;
+            z-index: 10;
+            text-align: center;
+        }
+
+        .modal.active {
+            display: block;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 9;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            background-color: #87ceeb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #00bfff;
+        }
+
+        button:disabled {
+            background-color: #87ceeb;
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .timer {
+            margin-top: 10px;
+        }
+
+        /* PC 버전 스타일 */
+        @media (min-width: 768px) {
+            .game-container {
+                width: 50vw;
+                height: 50vw;
+                max-width: 600px;
+                max-height: 600px;
+            }
+
+            .card-content {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <button id="startButton">게임 시작</button>
+    <button id="resetButton">리셋</button>
+</div>
+<div class="game-container" id="gameContainer"></div>
+
+<div class="overlay" id="overlay"></div>
+<div class="modal" id="modal">
+    <h2>축하합니다!</h2>
+    <p>모든 카드를 맞췄습니다.</p>
+    <p>게임 시간: <span id="timeTaken"></span> 초</p>
+    <button id="modalResetButton">다시 시작</button>
+</div>
+
+<script>
+    const cardValues = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    let cardArray = [...cardValues, ...cardValues];
+    let flippedCards = [];
+    let matchedCards = [];
+    let gameStartTime = null;
+
+    const startButton = document.getElementById('startButton');
+    const resetButton = document.getElementById('resetButton');
+    const modal = document.getElementById('modal');
+    const overlay = document.getElementById('overlay');
+    const timeTaken = document.getElementById('timeTaken');
+    const modalResetButton = document.getElementById('modalResetButton');
+
+    // 카드 배열을 섞는 함수
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    // 카드 HTML 생성
+    function createCard(value) {
+        const card = document.createElement('div');
+        card.classList.add('card');
+        card.innerHTML = `<div class="card-content">${value}</div>`;
+        card.addEventListener('click', () => flipCard(card, value));
+        return card;
+    }
+
+    // 게임 시작 함수
+    function startGame() {
+        const gameContainer = document.getElementById('gameContainer');
+        gameContainer.innerHTML = '';
+        cardArray = shuffle(cardArray);
+        cardArray.forEach(value => {
+            const card = createCard(value);
+            card.classList.add('flipped'); // 처음에 카드 보여주기
+            gameContainer.appendChild(card);
+        });
+
+        // 2초간 전체 카드를 보여주고 숨김
+        setTimeout(() => {
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.remove('flipped');
+            });
+        }, 2000);
+
+        gameStartTime = Date.now();
+    }
+
+    // 카드 뒤집기
+    function flipCard(card, value) {
+        if (flippedCards.length < 2 && !card.classList.contains('flipped') && !matchedCards.includes(value)) {
+            card.classList.add('flipped');
+            flippedCards.push({ card, value });
+
+            if (flippedCards.length === 2) {
+                setTimeout(checkMatch, 1000);
+            }
+        }
+    }
+
+    // 카드 매칭 확인
+    function checkMatch() {
+        const [first, second] = flippedCards;
+
+        if (first.value === second.value) {
+            matchedCards.push(first.value);
+            flippedCards = [];
+            if (matchedCards.length === cardValues.length) {
+                endGame();
+            }
+        } else {
+            first.card.classList.remove('flipped');
+            second.card.classList.remove('flipped');
+            flippedCards = [];
+        }
+    }
+
+    // 게임 종료 처리
+    function endGame() {
+        const timeTakenInSeconds = Math.floor((Date.now() - gameStartTime) / 1000);
+        timeTaken.textContent = timeTakenInSeconds;
+        showModal();
+    }
+
+    // 모달 창 보이기
+    function showModal() {
+        modal.classList.add('active');
+        overlay.classList.add('active');
+    }
+
+    // 게임 리셋
+    function resetGame() {
+        flippedCards = [];
+        matchedCards = [];
+        modal.classList.remove('active');
+        overlay.classList.remove('active');
+        startButton.disabled = false;
+        gameStartTime = null;
+    }
+
+    // 리셋 버튼 클릭 시
+    resetButton.addEventListener('click', resetGame);
+
+    // 모달 창 안에서 다시 시작 버튼 클릭 시
+    modalResetButton.addEventListener('click', () => {
+        resetGame();
+        startGame();
+    });
+
+    // 게임 시작 버튼 클릭 시
+    startButton.addEventListener('click', () => {
+        startGame();
+        startButton.disabled = true; // 중복 시작 방지
+    });
+
+</script>
+
+</body>
+</html>
